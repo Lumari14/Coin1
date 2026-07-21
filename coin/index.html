@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coin · Tu presupuesto mensual y anual</title>
+<style>
+  /* ============================================================
+     Coin — Presupuesto personal (un solo archivo, sin dependencias)
+     Todo funciona en el navegador. Tus datos se guardan solo en tu
+     equipo (localStorage). Nada se sube a internet.
+     ============================================================ */
+
+  :root{
+    --brand:#0ea5a4;      /* verde azulado "moneda" */
+    --brand-2:#0891b2;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --bg:#f1f5f9;
+    --card:#ffffff;
+    --border:#e2e8f0;
+    --line:#e2e8f0;
+    --green:#16a34a;
+    --red:#e11d48;
+    --blue:#2563eb;
+    --amber:#f59e0b;
+    --purple:#a855f7;
+    --shadow:0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+    --radius:16px;
+  }
+  :root[data-theme="dark"]{
+    --ink:#e2e8f0;
+    --muted:#94a3b8;
+    --bg:#0b1220;
+    --card:#111a2e;
+    --border:#22304d;
+    --line:#22304d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased; line-height:1.45;
+  }
+  a{color:var(--brand)}
+
+  /* Header */
+  header.app{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(180deg, var(--card), var(--card));
+    border-bottom:1px solid var(--border);
+    box-shadow:0 1px 0 var(--border);
+  }
+  .bar{
+    max-width:1100px; margin:0 auto; padding:12px 18px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .logo{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; letter-spacing:-.02em}
+  .logo .coin{
+    width:30px;height:30px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #5eead4, var(--brand));
+    display:grid;place-items:center;color:#053b3a;font-weight:900;box-shadow:inset 0 -3px 6px rgba(0,0,0,.15)
+  }
+  .logo small{font-weight:500;color:var(--muted);font-size:12px;display:block;margin-top:-4px}
+  .spacer{flex:1}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  select,button,input{font-family:inherit;font-size:14px}
+  .btn{
+    border:1px solid var(--border); background:var(--card); color:var(--ink);
+    padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600;
+    display:inline-flex;align-items:center;gap:6px; transition:.15s;
+  }
+  .btn:hover{border-color:var(--brand); color:var(--brand)}
+  .btn.primary{background:var(--brand); border-color:var(--brand); color:white}
+  .btn.primary:hover{background:var(--brand-2); color:white}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:5px 9px;font-size:13px;border-radius:8px}
+  .btn.danger:hover{border-color:var(--red);color:var(--red)}
+  select{
+    border:1px solid var(--border); background:var(--card); color:var(--ink);
+    padding:8px 10px; border-radius:10px; cursor:pointer;
+  }
+
+  /* Nav tabs */
+  nav.tabs{max-width:1100px;margin:0 auto;padding:0 18px;display:flex;gap:4px;flex-wrap:wrap}
+  nav.tabs button{
+    border:none;background:none;color:var(--muted);font-weight:600;
+    padding:12px 14px;cursor:pointer;border-bottom:3px solid transparent;font-size:15px;
+  }
+  nav.tabs button.active{color:var(--brand);border-color:var(--brand)}
+  nav.tabs button:hover{color:var(--ink)}
+
+  /* Layout */
+  main{max-width:1100px;margin:0 auto;padding:22px 18px 60px}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .cols-2{grid-template-columns:1fr 1fr}
+  @media(max-width:820px){.cols-2{grid-template-columns:1fr}}
+  .card{
+    background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); padding:18px; box-shadow:var(--shadow);
+  }
+  .card h3{margin:0 0 4px; font-size:15px}
+  .card .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+
+  /* KPI */
+  .kpi .label{color:var(--muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .kpi .value{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+  .kpi .value.pos{color:var(--green)} .kpi .value.neg{color:var(--red)}
+  .kpi .foot{color:var(--muted);font-size:12px;margin-top:4px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);font-size:14px}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  .tbl-input{width:100%;border:1px solid transparent;background:transparent;color:var(--ink);padding:6px 8px;border-radius:8px}
+  .tbl-input:focus{outline:none;border-color:var(--brand);background:var(--bg)}
+  .tbl-input.amount{text-align:right;font-variant-numeric:tabular-nums}
+  .cat-select{border:1px solid var(--border);background:var(--card);color:var(--ink);padding:6px 8px;border-radius:8px;width:100%}
+  .del{color:var(--muted);border:none;background:none;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:8px}
+  .del:hover{color:var(--red);background:var(--bg)}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+  .legend span{display:flex;align-items:center}
+
+  /* Progress (real vs objetivo) */
+  .prog{margin:14px 0}
+  .prog .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .prog .track{position:relative;height:12px;background:var(--bg);border-radius:99px;overflow:visible;border:1px solid var(--border)}
+  .prog .fill{height:100%;border-radius:99px;transition:width .4s}
+  .prog .marker{position:absolute;top:-4px;width:2px;height:20px;background:var(--ink);opacity:.55}
+  .prog .marker::after{content:"meta";position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--muted)}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+  .badge.ok{background:rgba(22,163,74,.14);color:var(--green)}
+  .badge.over{background:rgba(225,29,72,.14);color:var(--red)}
+
+  /* Meta de ahorro (barra grande) */
+  .goalbar .head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .goalbar .big{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .goalbar .big span{color:var(--muted);font-size:16px;font-weight:600}
+  .goalbar .track{height:22px;background:var(--bg);border:1px solid var(--border);border-radius:99px;overflow:hidden}
+  .goalbar .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#5eead4,var(--brand));display:flex;align-items:center;justify-content:flex-end;color:#053b3a;font-weight:800;font-size:12px;padding-right:8px;transition:width .5s;min-width:34px}
+  .goalbar .msg{margin-top:12px;font-size:14px}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px}
+  .empty h3{color:var(--ink)}
+  .row-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pill{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:12px;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted)}
+  .month-nav{display:flex;align-items:center;gap:8px}
+  .month-nav .title{font-weight:800;font-size:18px;min-width:170px;text-align:center;text-transform:capitalize}
+  .rec{border-left:4px solid var(--brand);background:var(--bg);padding:12px 14px;border-radius:0 10px 10px 0;margin-bottom:10px;font-size:14px}
+  .rec.warn{border-color:var(--red)}
+  .rec.good{border-color:var(--green)}
+  .rec b{color:var(--ink)}
+  .target-row{display:grid;grid-template-columns:1fr 90px 60px;gap:10px;align-items:center;margin-bottom:10px}
+  .target-row input[type=number]{width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);text-align:right}
+  .sum-ok{color:var(--green)} .sum-bad{color:var(--red)}
+  footer.app{max-width:1100px;margin:0 auto;padding:0 18px 40px;color:var(--muted);font-size:12px;text-align:center}
+  svg{max-width:100%;height:auto;display:block}
+  .chart-wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="bar">
+    <div class="logo">
+      <div class="coin">$</div>
+      <div>Coin<small>Presupuesto mensual y anual</small></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <select id="yearSel" title="Año"></select>
+      <select id="curSel" title="Moneda">
+        <option value="COP">COP $</option>
+        <option value="USD">USD $</option>
+        <option value="EUR">EUR €</option>
+      </select>
+      <button class="btn sm ghost" id="themeBtn" title="Modo claro/oscuro">🌙</button>
+      <button class="btn sm" id="exportBtn">⬇︎ Exportar</button>
+      <button class="btn sm" id="importBtn">⬆︎ Importar</button>
+      <input type="file" id="importFile" accept="application/json" hidden />
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-view="dashboard" class="active">📊 Resumen</button>
+    <button data-view="month">🗓️ Mes</button>
+    <button data-view="targets">🎯 Objetivos</button>
+    <button data-view="year">📈 Análisis anual</button>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<footer class="app">
+  Hecho con 💚 usando Claude Code · Tus datos se guardan solo en este navegador (privado) ·
+  <a href="#" id="resetLink">Borrar todo y empezar de cero</a>
+</footer>
+
+<script>
+/* =====================================================================
+   1) CONFIGURACIÓN Y DATOS POR DEFECTO
+   ===================================================================== */
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+// Grupos de presupuesto (para comparar gasto real vs objetivo)
+const GRUPOS = {
+  ahorro:    { nombre:"Ahorro",           color:"var(--green)",  esGasto:false },
+  fijos:     { nombre:"Gastos fijos",     color:"var(--blue)",   esGasto:true  },
+  variables: { nombre:"Gastos variables", color:"var(--amber)",  esGasto:true  },
+  viajes:    { nombre:"Viajes y ocio",    color:"var(--purple)", esGasto:true  },
+};
+const COLOR_GRUPO = { ahorro:"#16a34a", fijos:"#2563eb", variables:"#f59e0b", viajes:"#a855f7" };
+
+// Categorías de ejemplo (editables por la persona)
+const CATEGORIAS_EJEMPLO = [
+  {id:"arriendo",     nombre:"Arriendo / Vivienda",      grupo:"fijos"},
+  {id:"servicios",    nombre:"Servicios (luz, agua, gas)", grupo:"fijos"},
+  {id:"internet",     nombre:"Internet y celular",       grupo:"fijos"},
+  {id:"seguros",      nombre:"Seguros",                  grupo:"fijos"},
+  {id:"prestamos",    nombre:"Préstamos / Deudas",       grupo:"fijos"},
+  {id:"mercado",      nombre:"Mercado / Comida",         grupo:"variables"},
+  {id:"transporte",   nombre:"Transporte",               grupo:"variables"},
+  {id:"salud",        nombre:"Salud",                    grupo:"variables"},
+  {id:"ropa",         nombre:"Ropa y hogar",             grupo:"variables"},
+  {id:"restaurantes", nombre:"Restaurantes",             grupo:"variables"},
+  {id:"ocio",         nombre:"Ocio y entretenimiento",   grupo:"viajes"},
+  {id:"suscripciones",nombre:"Suscripciones",            grupo:"viajes"},
+  {id:"viajes",       nombre:"Viajes",                   grupo:"viajes"},
+];
+
+const OBJETIVOS_EJEMPLO = { ahorro:20, fijos:50, variables:20, viajes:10 };
+
+const CUR = {
+  COP:{loc:"es-CO", cur:"COP", dp:0},
+  USD:{loc:"en-US", cur:"USD", dp:2},
+  EUR:{loc:"es-ES", cur:"EUR", dp:2},
+};
+
+/* =====================================================================
+   2) ESTADO Y ALMACENAMIENTO (localStorage)
+   ===================================================================== */
+const KEY = "coin_data_v1";
+let data, view="dashboard", currentYear, currentMonthIdx;
+
+function datosNuevos(){
+  return {
+    version:1,
+    currency:"COP",
+    theme:"light",
+    metaAhorroAnual:0,
+    objetivos:{...OBJETIVOS_EJEMPLO},
+    categorias:CATEGORIAS_EJEMPLO.map(c=>({...c})),
+    meses:{} // "2026-01": {ingresos:[{id,etiqueta,monto}], gastos:[{id,categoriaId,monto,nota}]}
+  };
+}
+function cargar(){
+  try{ const raw=localStorage.getItem(KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  return datosNuevos();
+}
+function guardar(){ localStorage.setItem(KEY, JSON.stringify(data)); }
+
+/* =====================================================================
+   3) UTILIDADES
+   ===================================================================== */
+const uid = () => Math.random().toString(36).slice(2,9);
+function money(v){
+  const c=CUR[data.currency]||CUR.COP;
+  return new Intl.NumberFormat(c.loc,{style:"currency",currency:c.cur,maximumFractionDigits:c.dp}).format(v||0);
+}
+function pct(v){ return (v||0).toFixed(0)+"%"; }
+function claveMes(anio,mesIdx){ return anio+"-"+String(mesIdx+1).padStart(2,"0"); }
+function getMes(anio,mesIdx){
+  const k=claveMes(anio,mesIdx);
+  if(!data.meses[k]) data.meses[k]={ingresos:[],gastos:[]};
+  return data.meses[k];
+}
+function categoria(id){ return data.categorias.find(c=>c.id===id); }
+
+/* =====================================================================
+   4) CÁLCULOS
+   ===================================================================== */
+function calcularMes(anio,mesIdx){
+  const m = data.meses[claveMes(anio,mesIdx)] || {ingresos:[],gastos:[]};
+  const ingreso = (m.ingresos||[]).reduce((s,i)=>s+(+i.monto||0),0);
+  const porGrupo = {ahorro:0,fijos:0,variables:0,viajes:0};
+  let gasto=0;
+  (m.gastos||[]).forEach(e=>{
+    const cat=categoria(e.categoriaId);
+    const g = cat ? cat.grupo : "variables";
+    if(g!=="ahorro"){ porGrupo[g]+= (+e.monto||0); gasto += (+e.monto||0); }
+  });
+  const ahorro = ingreso - gasto;
+  porGrupo.ahorro = ahorro; // el ahorro real = lo que sobra
+  return {ingreso, gasto, ahorro, porGrupo, tieneDatos: ingreso>0 || gasto>0};
+}
+function calcularAnio(anio){
+  const meses=[]; let ingreso=0,gasto=0,ahorro=0;
+  const porGrupo={ahorro:0,fijos:0,variables:0,viajes:0};
+  const porCategoria={};
+  for(let i=0;i<12;i++){
+    const c=calcularMes(anio,i);
+    meses.push(c);
+    ingreso+=c.ingreso; gasto+=c.gasto; ahorro+=c.ahorro;
+    ["fijos","variables","viajes"].forEach(g=>porGrupo[g]+=c.porGrupo[g]);
+    const m=data.meses[claveMes(anio,i)];
+    if(m) (m.gastos||[]).forEach(e=>{
+      const cat=categoria(e.categoriaId); if(cat&&cat.grupo!=="ahorro"){
+        porCategoria[cat.id]=(porCategoria[cat.id]||0)+(+e.monto||0);
+      }
+    });
+  }
+  porGrupo.ahorro = ingreso - gasto;
+  return {meses, ingreso, gasto, ahorro, porGrupo, porCategoria};
+}
+
+/* =====================================================================
+   5) GRÁFICAS EN SVG (sin librerías)
+   ===================================================================== */
+function chartBarras(meses){
+  const W=680,H=240,pad=34,bw=W-pad*2, top=20;
+  const max=Math.max(1,...meses.map(m=>Math.max(m.ingreso,m.gasto)));
+  const step=bw/12, g=Math.min(step*0.32, 14);
+  let bars="",labels="",grid="";
+  for(let i=1;i<=4;i++){ const y=top+(H-top-24)*(1-i/4); const val=max*i/4;
+    grid+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="var(--line)"/>`;
+    grid+=`<text x="${pad-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${cortar(val)}</text>`;
+  }
+  meses.forEach((m,i)=>{
+    const x=pad+step*i+ (step-2*g)/2;
+    const hi=(H-top-24)*(m.ingreso/max), hg=(H-top-24)*(m.gasto/max);
+    bars+=`<rect x="${x}" y="${top+(H-top-24)-hi}" width="${g}" height="${hi}" rx="2" fill="${COLOR_GRUPO.ahorro}"><title>Ingreso ${MESES[i]}: ${money(m.ingreso)}</title></rect>`;
+    bars+=`<rect x="${x+g+2}" y="${top+(H-top-24)-hg}" width="${g}" height="${hg}" rx="2" fill="var(--red)"><title>Gasto ${MESES[i]}: ${money(m.gasto)}</title></rect>`;
+    labels+=`<text x="${pad+step*i+step/2}" y="${H-8}" text-anchor="middle" font-size="9" fill="var(--muted)">${MESES[i].slice(0,3)}</text>`;
+  });
+  return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%">${grid}${bars}${labels}</svg></div>
+   <div class="legend"><span><i class="dot" style="background:${COLOR_GRUPO.ahorro}"></i>Ingresos</span><span><i class="dot" style="background:var(--red)"></i>Gastos</span></div>`;
+}
+function cortar(v){ if(v>=1e6) return (v/1e6).toFixed(1)+"M"; if(v>=1e3) return Math.round(v/1e3)+"k"; return Math.round(v); }
+
+function chartDona(porCategoria){
+  const entradas=Object.entries(porCategoria).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const total=entradas.reduce((s,[,v])=>s+v,0);
+  if(total<=0) return `<div class="empty">Sin gastos para mostrar todavía.</div>`;
+  const r=70, C=2*Math.PI*r, cx=90, cy=90; let off=0, arcs="", leg="";
+  const paleta=["#2563eb","#f59e0b","#a855f7","#ef4444","#10b981","#06b6d4","#ec4899","#8b5cf6","#f97316","#14b8a6","#64748b","#eab308","#22c55e"];
+  entradas.forEach(([id,v],i)=>{
+    const frac=v/total, len=frac*C, col=paleta[i%paleta.length];
+    arcs+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="26"
+      stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"><title>${(categoria(id)||{}).nombre||id}: ${money(v)} (${(frac*100).toFixed(0)}%)</title></circle>`;
+    off+=len;
+    if(i<8) leg+=`<span><i class="dot" style="background:${col}"></i>${(categoria(id)||{}).nombre||id} · ${(frac*100).toFixed(0)}%</span>`;
+  });
+  return `<div class="row-flex" style="align-items:flex-start">
+    <svg viewBox="0 0 180 180" width="180" style="flex:0 0 auto">${arcs}
+      <text x="90" y="86" text-anchor="middle" font-size="12" fill="var(--muted)">Gasto total</text>
+      <text x="90" y="104" text-anchor="middle" font-size="15" font-weight="800" fill="var(--ink)">${cortar(total)}</text>
+    </svg>
+    <div class="legend" style="flex:1;flex-direction:column;gap:8px">${leg}</div></div>`;
+}
+
+function chartLinea(meses){
+  const W=680,H=200,pad=34,top=16;
+  const vals=meses.map(m=>m.ahorro);
+  const max=Math.max(1,...vals.map(Math.abs));
+  const zeroY=top+(H-top-24)*(max/(2*max)); // linea del cero a mitad
+  const stepX=(W-pad*2)/11;
+  const y=v=> top+(H-top-24)*(1-(v+max)/(2*max));
+  let pts=vals.map((v,i)=>`${pad+stepX*i},${y(v)}`).join(" ");
+  let dots="",labels="";
+  vals.forEach((v,i)=>{
+    dots+=`<circle cx="${pad+stepX*i}" cy="${y(v)}" r="3.5" fill="${v>=0?COLOR_GRUPO.ahorro:'var(--red)'}"><title>${MESES[i]}: ${money(v)}</title></circle>`;
+    labels+=`<text x="${pad+stepX*i}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--muted)">${MESES[i].slice(0,3)}</text>`;
+  });
+  return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%">
+    <line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="var(--line)" stroke-dasharray="4 4"/>
+    <polyline points="${pts}" fill="none" stroke="${COLOR_GRUPO.ahorro}" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg></div>`;
+}
+
+function barrasRealVsObjetivo(calc){
+  const ingreso=calc.ingreso;
+  if(ingreso<=0) return `<div class="empty">Agrega ingresos para ver esta comparación.</div>`;
+  let html="";
+  Object.keys(GRUPOS).forEach(g=>{
+    const real = (calc.porGrupo[g]/ingreso)*100;
+    const meta = data.objetivos[g]||0;
+    const esGasto=GRUPOS[g].esGasto;
+    // Para gastos: bien si real <= meta. Para ahorro: bien si real >= meta.
+    const bien = esGasto ? real<=meta+1 : real>=meta-1;
+    const col = COLOR_GRUPO[g];
+    const ancho = Math.max(0,Math.min(100,real));
+    html+=`<div class="prog">
+      <div class="top">
+        <span><i class="dot" style="background:${col}"></i><b>${GRUPOS[g].nombre}</b> ${money(calc.porGrupo[g])}</span>
+        <span>${real.toFixed(0)}% <span class="badge ${bien?'ok':'over'}">${bien?'en meta':(esGasto?'te pasaste':'por debajo')}</span></span>
+      </div>
+      <div class="track">
+        <div class="fill" style="width:${ancho}%;background:${col};opacity:${bien?1:.85}"></div>
+        <div class="marker" style="left:${Math.min(100,meta)}%"></div>
+      </div>
+      <div class="hint">Meta: ${meta}% · ${money(ingreso*meta/100)}</div>
+    </div>`;
+  });
+  return html;
+}
+
+/* =====================================================================
+   6) VISTAS
+   ===================================================================== */
+function vistaDashboard(){
+  const cy=calcularAnio(currentYear);
+  const cm=calcularMes(currentYear,currentMonthIdx);
+  const tasaAhorroAnual = cy.ingreso>0 ? (cy.ahorro/cy.ingreso*100) : 0;
+  return `
+  <div class="grid cards">
+    ${kpi("Ingresos del año", money(cy.ingreso), "", "pos")}
+    ${kpi("Gastos del año", money(cy.gasto), "", "neg")}
+    ${kpi("Ahorro del año", money(cy.ahorro), pct(tasaAhorroAnual)+" de tus ingresos", cy.ahorro>=0?"pos":"neg")}
+    ${kpi("Meta de ahorro", pct(data.objetivos.ahorro), tasaAhorroAnual>=data.objetivos.ahorro?"✅ vas cumpliendo":"⚠️ vas por debajo")}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>🏆 Meta de ahorro del año ${currentYear}</h3>
+    <div class="sub">Tu progreso hacia la cantidad que quieres juntar</div>
+    ${barraMetaAhorro(cy)}
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card"><h3>Ingresos vs gastos por mes</h3><div class="sub">Año ${currentYear}</div>${chartBarras(cy.meses)}</div>
+    <div class="card"><h3>Evolución del ahorro</h3><div class="sub">Cuánto te queda cada mes</div>${chartLinea(cy.meses)}</div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card"><h3>¿En qué gastas?</h3><div class="sub">Distribución del año ${currentYear}</div>${chartDona(cy.porCategoria)}</div>
+    <div class="card"><h3>Real vs objetivo</h3><div class="sub">Tu gasto real comparado con los % que elegiste (año)</div>${barrasRealVsObjetivo(cy)}</div>
+  </div>`;
+}
+
+function kpi(label,value,foot,cls){
+  return `<div class="card kpi"><div class="label">${label}</div>
+    <div class="value ${cls||''}">${value}</div><div class="foot">${foot||"&nbsp;"}</div></div>`;
+}
+
+function vistaMes(){
+  const m=getMes(currentYear,currentMonthIdx);
+  const cm=calcularMes(currentYear,currentMonthIdx);
+  // filas de ingresos
+  let ingresosRows = (m.ingresos||[]).map(it=>`
+    <tr>
+      <td><input class="tbl-input" list="ingresoSug" data-tipo="ingreso" data-id="${it.id}" data-campo="etiqueta" value="${esc(it.etiqueta)}" placeholder="Ej: Salario (o escribe el tuyo)"/></td>
+      <td class="num" style="width:200px"><input class="tbl-input amount" type="number" data-tipo="ingreso" data-id="${it.id}" data-campo="monto" value="${it.monto||''}" placeholder="0"/></td>
+      <td style="width:44px"><button class="del" data-borrar="ingreso" data-id="${it.id}" title="Eliminar">🗑</button></td>
+    </tr>`).join("");
+  if(!ingresosRows) ingresosRows=`<tr><td colspan="3" class="hint" style="padding:12px">Aún no hay ingresos. Agrega tu salario u otros ingresos.</td></tr>`;
+
+  // opciones de categoría agrupadas
+  const opciones = ["fijos","variables","viajes"].map(g=>`<optgroup label="${GRUPOS[g].nombre}">`+
+      data.categorias.filter(c=>c.grupo===g).map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join("")+`</optgroup>`).join("")
+      + `<option value="__nueva__">➕ Otra categoría (personalizar)…</option>`;
+
+  const SUG_INGRESOS = ["Salario","Freelance / Honorarios","Negocio propio","Ventas","Arriendos","Bonos","Intereses / Inversiones","Pensión","Otros"];
+  const datalistIngresos = `<datalist id="ingresoSug">${SUG_INGRESOS.map(s=>`<option value="${s}">`).join("")}</datalist>`;
+
+  let gastosRows = (m.gastos||[]).map(e=>`
+    <tr>
+      <td><select class="cat-select" data-tipo="gasto" data-id="${e.id}" data-campo="categoriaId">${opciones}</select></td>
+      <td><input class="tbl-input" data-tipo="gasto" data-id="${e.id}" data-campo="nota" value="${esc(e.nota||'')}" placeholder="Nota (opcional)"/></td>
+      <td class="num" style="width:180px"><input class="tbl-input amount" type="number" data-tipo="gasto" data-id="${e.id}" data-campo="monto" value="${e.monto||''}" placeholder="0"/></td>
+      <td style="width:44px"><button class="del" data-borrar="gasto" data-id="${e.id}" title="Eliminar">🗑</button></td>
+    </tr>`).join("");
+  if(!gastosRows) gastosRows=`<tr><td colspan="4" class="hint" style="padding:12px">Aún no hay gastos. Usa “+ Agregar gasto”. Las categorías ya vienen de ejemplo (edítalas en 🎯 Objetivos).</td></tr>`;
+
+  return `
+  ${datalistIngresos}
+  <div class="card" style="margin-bottom:16px">
+    <div class="row-flex" style="justify-content:space-between">
+      <div class="month-nav">
+        <button class="btn sm" data-mes="-1">‹</button>
+        <div class="title">${MESES[currentMonthIdx]} ${currentYear}</div>
+        <button class="btn sm" data-mes="1">›</button>
+      </div>
+      <div class="row-flex">
+        <button class="btn sm" data-copiar-anterior title="Copiar ingresos y gastos del mes anterior">📋 Copiar mes anterior</button>
+        <span class="pill">Ingreso: ${money(cm.ingreso)}</span>
+        <span class="pill">Gasto: ${money(cm.gasto)}</span>
+        <span class="pill" style="color:${cm.ahorro>=0?'var(--green)':'var(--red)'}">Ahorro: ${money(cm.ahorro)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>💵 Ingresos</h3><div class="sub">Lo que ganas este mes</div>
+      <table><thead><tr><th>Concepto</th><th class="num">Monto</th><th></th></tr></thead>
+      <tbody>${ingresosRows}</tbody></table>
+      <button class="btn sm" style="margin-top:12px" data-add="ingreso">+ Agregar ingreso</button>
+    </div>
+    <div class="card">
+      <h3>🧾 Gastos</h3><div class="sub">En qué se te va el dinero</div>
+      <table><thead><tr><th>Categoría</th><th>Nota</th><th class="num">Monto</th><th></th></tr></thead>
+      <tbody>${gastosRows}</tbody></table>
+      <button class="btn sm" style="margin-top:12px" data-add="gasto">+ Agregar gasto</button>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card">
+      <h3>🎯 ¿Cómo vas este mes frente a tus objetivos?</h3>
+      <div class="sub">Comparación de tu gasto real con los porcentajes que elegiste</div>
+      ${barrasRealVsObjetivo(cm)}
+    </div>
+    <div class="card">
+      <h3>💡 Recomendaciones del mes</h3>
+      <div class="sub">Se actualizan a medida que llenas tu presupuesto</div>
+      ${recomendacionesMes(cm)}
+    </div>
+  </div>`;
+}
+
+function vistaObjetivos(){
+  const suma = Object.values(data.objetivos).reduce((a,b)=>a+(+b||0),0);
+  let filasObj = Object.keys(GRUPOS).map(g=>`
+    <div class="target-row">
+      <div><i class="dot" style="background:${COLOR_GRUPO[g]}"></i><b>${GRUPOS[g].nombre}</b>
+        <div class="hint">${GRUPOS[g].esGasto?'Gasto':'Lo que quieres guardar'}</div></div>
+      <input type="number" min="0" max="100" data-obj="${g}" value="${data.objetivos[g]}"/>
+      <div class="hint">%</div>
+    </div>`).join("");
+
+  let filasCat = data.categorias.map(c=>`
+    <tr>
+      <td><input class="tbl-input" data-cat="${c.id}" data-campo="nombre" value="${esc(c.nombre)}"/></td>
+      <td style="width:200px">
+        <select class="cat-select" data-cat="${c.id}" data-campo="grupo">
+          ${["fijos","variables","viajes"].map(g=>`<option value="${g}" ${c.grupo===g?'selected':''}>${GRUPOS[g].nombre}</option>`).join("")}
+        </select>
+      </td>
+      <td style="width:44px"><button class="del" data-borrar-cat="${c.id}" title="Eliminar">🗑</button></td>
+    </tr>`).join("");
+
+  return `
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>🎯 Tus objetivos (%)</h3>
+      <div class="sub">Define cómo quieres repartir tus ingresos. La regla clásica es 50/30/20.</div>
+      ${filasObj}
+      <div style="margin-top:8px;font-size:14px">Suma total:
+        <b class="${suma===100?'sum-ok':'sum-bad'}">${suma}%</b>
+        ${suma===100?'✅':'⚠️ lo ideal es que sume 100%'}</div>
+      <button class="btn sm" style="margin-top:12px" data-obj-reset>Restaurar 50/20/20/10</button>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+      <h3>🏆 Meta de ahorro del año (en dinero)</h3>
+      <div class="sub">¿Cuánto quieres juntar este año? Verás tu progreso en el Resumen.</div>
+      <div class="row-flex">
+        <input type="number" min="0" step="100000" data-metaahorro value="${+data.metaAhorroAnual||0}"
+          style="flex:1;min-width:140px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--ink);text-align:right;font-size:16px;font-weight:700" placeholder="Ej: 5000000"/>
+        <span class="hint">${data.currency}</span>
+      </div>
+      <div class="hint" style="margin-top:6px">Equivale a ${money((+data.metaAhorroAnual||0)/12)} al mes.</div>
+    </div>
+    <div class="card">
+      <h3>🗂️ Tus categorías de gasto</h3>
+      <div class="sub">Edita, agrega o elimina. Cada categoría pertenece a un grupo.</div>
+      <table><thead><tr><th>Categoría</th><th>Grupo</th><th></th></tr></thead>
+      <tbody>${filasCat}</tbody></table>
+      <button class="btn sm" style="margin-top:12px" data-add-cat>+ Agregar categoría</button>
+    </div>
+  </div>`;
+}
+
+function vistaAnio(){
+  const cy=calcularAnio(currentYear);
+  if(cy.ingreso<=0 && cy.gasto<=0){
+    return `<div class="card"><div class="empty">
+      <h3>Todavía no hay datos de ${currentYear}</h3>
+      <p>Ve a la pestaña <b>🗓️ Mes</b> y registra tus ingresos y gastos.<br>
+      Cuando tengas datos, aquí verás tu análisis anual y recomendaciones.</p>
+      <button class="btn primary" data-ejemplo>✨ Cargar datos de ejemplo</button>
+    </div></div>`;
+  }
+  const tasa = cy.ingreso>0 ? cy.ahorro/cy.ingreso*100 : 0;
+  const activos = cy.meses.filter(m=>m.tieneDatos);
+  const nMeses = activos.length||1;
+  // mes más caro y categoría top
+  let mesCaro=0, maxG=-1;
+  cy.meses.forEach((m,i)=>{ if(m.gasto>maxG){maxG=m.gasto; mesCaro=i;} });
+  const catTop=Object.entries(cy.porCategoria).sort((a,b)=>b[1]-a[1])[0];
+
+  return `
+  <div class="grid cards">
+    ${kpi("Ingreso total "+currentYear, money(cy.ingreso),"", "pos")}
+    ${kpi("Gasto total", money(cy.gasto),"", "neg")}
+    ${kpi("Ahorro logrado", money(cy.ahorro), pct(tasa)+" (meta "+data.objetivos.ahorro+"%)", cy.ahorro>=0?"pos":"neg")}
+    ${kpi("Ahorro promedio/mes", money(cy.ahorro/nMeses), nMeses+" meses con datos")}
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>📌 Resumen del año</h3>
+    <ul style="line-height:1.9;margin:8px 0">
+      <li>Mes con mayor gasto: <b style="text-transform:capitalize">${MESES[mesCaro]}</b> (${money(maxG)}).</li>
+      ${catTop?`<li>Categoría donde más gastas: <b>${(categoria(catTop[0])||{}).nombre||catTop[0]}</b> (${money(catTop[1])}, ${(catTop[1]/cy.gasto*100).toFixed(0)}% de tus gastos).</li>`:''}
+      <li>Tu tasa de ahorro anual es <b>${tasa.toFixed(0)}%</b> ${tasa>=data.objetivos.ahorro?'— ¡vas por encima de tu meta! 🎉':'— tu meta es '+data.objetivos.ahorro+'%.'}</li>
+    </ul>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card"><h3>Gasto por grupo (año)</h3>${barrasRealVsObjetivo(cy)}</div>
+    <div class="card"><h3>💡 Ideas para optimizar tu presupuesto</h3>
+      <div class="sub">Basadas en tus objetivos y tu gasto real</div>
+      ${recomendaciones(cy,tasa,nMeses)}
+    </div>
+  </div>`;
+}
+
+function recomendaciones(cy,tasa,nMeses){
+  const ing=cy.ingreso; if(ing<=0) return "";
+  const ingMes = ing/nMeses;
+  let recs=[];
+  // Ahorro
+  if(tasa < data.objetivos.ahorro-1){
+    const falta=(data.objetivos.ahorro-tasa)/100*ingMes;
+    recs.push({tipo:"warn", txt:`Estás ahorrando <b>${tasa.toFixed(0)}%</b>, tu meta es <b>${data.objetivos.ahorro}%</b>. Te faltan cerca de <b>${money(falta)}/mes</b> para llegar. Revisa los grupos donde te pasaste.`});
+  } else {
+    recs.push({tipo:"good", txt:`¡Bien! Tu ahorro (<b>${tasa.toFixed(0)}%</b>) alcanza o supera tu meta de <b>${data.objetivos.ahorro}%</b>. Considera invertir el excedente para que crezca.`});
+  }
+  // Grupos de gasto
+  ["fijos","variables","viajes"].forEach(g=>{
+    const real=cy.porGrupo[g]/ing*100, meta=data.objetivos[g]||0;
+    if(real>meta+2){
+      const exceso=(real-meta)/100*ingMes;
+      recs.push({tipo:"warn", txt:`En <b>${GRUPOS[g].nombre}</b> gastas <b>${real.toFixed(0)}%</b> (meta ${meta}%). Recortando unos <b>${money(exceso)}/mes</b> volverías a tu objetivo.`});
+    }
+  });
+  // Categoría más pesada
+  const catTop=Object.entries(cy.porCategoria).sort((a,b)=>b[1]-a[1])[0];
+  if(catTop && catTop[1]/cy.gasto>0.30){
+    recs.push({tipo:"", txt:`<b>${(categoria(catTop[0])||{}).nombre||catTop[0]}</b> se lleva más del 30% de tus gastos. Si bajas un 10% ahí, ahorrarías <b>${money(catTop[1]*0.10)}</b> al año.`});
+  }
+  // Meses en déficit
+  const deficit=cy.meses.filter(m=>m.tieneDatos && m.ahorro<0).length;
+  if(deficit>0) recs.push({tipo:"warn", txt:`Tuviste <b>${deficit} mes(es)</b> gastando más de lo que ganaste. Intenta crear un fondo de emergencia para esos meses.`});
+  if(recs.length===0) recs.push({tipo:"good", txt:"Tu presupuesto está muy equilibrado. ¡Sigue así! 👏"});
+  return recs.map(r=>`<div class="rec ${r.tipo}">${r.txt}</div>`).join("");
+}
+
+function barraMetaAhorro(cy){
+  const meta=+data.metaAhorroAnual||0;
+  if(meta<=0){
+    return `<div class="empty" style="padding:24px">
+      🎯 Aún no defines una meta de ahorro en dinero para el año.<br>
+      <button class="btn primary" style="margin-top:12px" data-ir-objetivos>Definir mi meta de ahorro</button></div>`;
+  }
+  const logrado=Math.max(0,cy.ahorro);
+  const p=Math.min(100, meta>0 ? logrado/meta*100 : 0);
+  const falta=Math.max(0, meta-logrado);
+  const mesesConDatos=cy.meses.filter(m=>m.tieneDatos).length||0;
+  const promedio = mesesConDatos>0 ? cy.ahorro/mesesConDatos : 0;
+  const proyeccion = promedio*12;
+
+  let msg;
+  if(logrado>=meta){
+    msg=`<div class="rec good">🏆 ¡Meta cumplida! Ya ahorraste <b>${money(logrado)}</b>. ${logrado>meta?`Vas <b>${money(logrado-meta)}</b> por encima de tu objetivo.`:''} ¡Increíble! 🎉</div>`;
+  } else if(mesesConDatos===0){
+    msg=`<div class="hint">Registra tus meses para ver tu progreso y la proyección de fin de año.</div>`;
+  } else {
+    const dif=proyeccion-meta;
+    if(dif>=0){
+      msg=`<div class="rec good">📈 A este ritmo (${money(promedio)}/mes) terminarás el año con <b>${money(proyeccion)}</b> — ¡superas tu meta por ${money(dif)}! Vas muy bien.</div>`;
+    } else {
+      const faltaMes=(meta-cy.ahorro)/Math.max(1,(12-mesesConDatos));
+      msg=`<div class="rec warn">A este ritmo (${money(promedio)}/mes) llegarías a <b>${money(proyeccion)}</b>, <b>${money(-dif)}</b> por debajo de tu meta. Para lograrla necesitas ahorrar ~<b>${money(faltaMes)}/mes</b> en los meses que faltan.</div>`;
+    }
+  }
+  return `<div class="goalbar">
+    <div class="head">
+      <div class="big">${money(logrado)} <span>/ ${money(meta)}</span></div>
+      <div style="text-align:right"><div style="font-size:22px;font-weight:800;color:var(--brand)">${p.toFixed(0)}%</div>
+      <div class="hint">${falta>0?`Faltan ${money(falta)}`:'¡Completado!'}</div></div>
+    </div>
+    <div class="track"><div class="fill" style="width:${Math.max(p,2)}%">${p>=12?p.toFixed(0)+'%':''}</div></div>
+    <div class="msg">${msg}</div>
+  </div>`;
+}
+
+function recomendacionesMes(cm){
+  const ing=cm.ingreso;
+  if(ing<=0) return `<div class="rec">💡 Agrega tus <b>ingresos</b> del mes y empieza a registrar gastos para recibir recomendaciones personalizadas.</div>`;
+  const recs=[];
+  const tasa = cm.ahorro/ing*100;
+  const meta = data.objetivos.ahorro;
+
+  // 1) ¿Cómo va el ahorro este mes?
+  if(cm.ahorro<0){
+    recs.push({tipo:"warn", txt:`⚠️ Este mes gastaste <b>${money(-cm.ahorro)}</b> más de lo que ganaste. Estás en números rojos: prioriza recortar gastos no esenciales antes de que se vuelva deuda.`});
+  } else if(tasa>=meta){
+    recs.push({tipo:"good", txt:`🎉 ¡Felicidades! Ahorraste <b>${tasa.toFixed(0)}%</b> (${money(cm.ahorro)}) y <b>cumpliste tu meta</b> del ${meta}%. ${tasa>=meta+5?'Vas incluso por encima — considera invertir ese excedente para que crezca. 📈':'¡Vas muy bien, sigue así! 💪'}`});
+  } else {
+    const falta=(meta-tasa)/100*ing;
+    recs.push({tipo:"warn", txt:`Ahorraste <b>${tasa.toFixed(0)}%</b>, tu meta es <b>${meta}%</b>. Te faltaron <b>${money(falta)}</b> para lograrla este mes. Mira abajo dónde recortar. 👇`});
+  }
+
+  // 2) Grupos de gasto donde te pasaste
+  ["fijos","variables","viajes"].forEach(g=>{
+    const real=cm.porGrupo[g]/ing*100, m=data.objetivos[g]||0;
+    if(real>m+2){
+      const exceso=(real-m)/100*ing;
+      recs.push({tipo:"", txt:`En <b>${GRUPOS[g].nombre}</b> gastaste <b>${real.toFixed(0)}%</b> (tu meta es ${m}%). Recortando ~<b>${money(exceso)}</b> volverías a tu objetivo.`});
+    }
+  });
+
+  // 3) Gastos hormiga (pequeños gastos que suman)
+  const hormigaIds=["restaurantes","ocio","suscripciones"];
+  const mm=getMes(currentYear,currentMonthIdx);
+  let hormiga=0, detalle=[];
+  (mm.gastos||[]).forEach(e=>{ if(hormigaIds.includes(e.categoriaId) && (+e.monto>0)){ hormiga+=(+e.monto||0); detalle.push((categoria(e.categoriaId)||{}).nombre); } });
+  if(hormiga>0 && hormiga/ing>0.12){
+    recs.push({tipo:"", txt:`🐜 <b>Gastos hormiga</b> (${[...new Set(detalle)].join(", ")||"pequeños gastos"}) suman <b>${money(hormiga)}</b> — el ${(hormiga/ing*100).toFixed(0)}% de tus ingresos. Bajarlos un 30% te daría <b>${money(hormiga*0.30)}</b> extra de ahorro este mes.`});
+  }
+
+  // 4) ¿Reajustar la meta objetivo? (cuando un gasto fijo real es muy alto y difícil de bajar)
+  const realFijos=cm.porGrupo.fijos/ing*100, metaFijos=data.objetivos.fijos||0;
+  if(realFijos>metaFijos+8){
+    recs.push({tipo:"", txt:`Tus <b>gastos fijos</b> (arriendo, servicios…) son ${realFijos.toFixed(0)}% y suelen ser difíciles de bajar. Si esto se repite cada mes, ajusta tu meta a ~<b>${Math.ceil(realFijos)}%</b> en 🎯 Objetivos y baja otra categoría para compensar — así tus metas serán realistas.`});
+  }
+
+  // 5) Todo en orden
+  if(recs.length===1 && recs[0].tipo==="good"){
+    recs.push({tipo:"", txt:`Tu reparto de gastos está dentro de tus objetivos. Presupuesto equilibrado. 👏`});
+  }
+  return recs.map(r=>`<div class="rec ${r.tipo}">${r.txt}</div>`).join("");
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* =====================================================================
+   7) RENDER + EVENTOS
+   ===================================================================== */
+function render(){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  const app=document.getElementById("app");
+  if(view==="dashboard") app.innerHTML=vistaDashboard();
+  else if(view==="month") app.innerHTML=vistaMes();
+  else if(view==="targets") app.innerHTML=vistaObjetivos();
+  else if(view==="year") app.innerHTML=vistaAnio();
+  // fijar el valor seleccionado en cada <select> de categoría (mes)
+  document.querySelectorAll('select[data-tipo="gasto"][data-campo="categoriaId"]').forEach(sel=>{
+    const id=sel.dataset.id;
+    const m=getMes(currentYear,currentMonthIdx);
+    const e=(m.gastos||[]).find(x=>x.id===id);
+    if(e) sel.value=e.categoriaId;
+  });
+}
+
+// Tabs
+document.getElementById("tabs").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-view]"); if(!b) return;
+  view=b.dataset.view; render();
+});
+
+// Delegación de clics
+document.getElementById("app").addEventListener("click",e=>{
+  const t=e.target;
+  // navegar meses
+  const nav=t.closest("[data-mes]");
+  if(nav){ cambiarMes(+nav.dataset.mes); return; }
+  // agregar ingreso/gasto
+  const add=t.closest("[data-add]");
+  if(add){
+    const m=getMes(currentYear,currentMonthIdx);
+    if(add.dataset.add==="ingreso") m.ingresos.push({id:uid(),etiqueta:"",monto:""});
+    else m.gastos.push({id:uid(),categoriaId:data.categorias[0].id,monto:"",nota:""});
+    guardar(); render(); return;
+  }
+  // borrar fila
+  const del=t.closest("[data-borrar]");
+  if(del){
+    const m=getMes(currentYear,currentMonthIdx);
+    if(del.dataset.borrar==="ingreso") m.ingresos=m.ingresos.filter(x=>x.id!==del.dataset.id);
+    else m.gastos=m.gastos.filter(x=>x.id!==del.dataset.id);
+    guardar(); render(); return;
+  }
+  // objetivos: reset
+  if(t.closest("[data-obj-reset]")){ data.objetivos={...OBJETIVOS_EJEMPLO}; guardar(); render(); return; }
+  // ir a objetivos desde el dashboard
+  if(t.closest("[data-ir-objetivos]")){ view="targets"; render(); return; }
+  // copiar el mes anterior
+  if(t.closest("[data-copiar-anterior]")){
+    const prev = currentMonthIdx===0 ? {a:currentYear-1,m:11} : {a:currentYear,m:currentMonthIdx-1};
+    const pm = data.meses[claveMes(prev.a,prev.m)];
+    if(!pm || ((pm.ingresos||[]).length===0 && (pm.gastos||[]).length===0)){
+      alert("El mes anterior ("+MESES[prev.m]+" "+prev.a+") no tiene datos para copiar.");
+      return;
+    }
+    const cur=getMes(currentYear,currentMonthIdx);
+    if((cur.ingresos||[]).length || (cur.gastos||[]).length){
+      if(!confirm("Este mes ya tiene datos.\n¿Reemplazarlos con una copia de "+MESES[prev.m]+" "+prev.a+"?")) return;
+    }
+    cur.ingresos=(pm.ingresos||[]).map(i=>({id:uid(),etiqueta:i.etiqueta,monto:i.monto}));
+    cur.gastos=(pm.gastos||[]).map(e=>({id:uid(),categoriaId:e.categoriaId,monto:e.monto,nota:e.nota}));
+    guardar(); render();
+    return;
+  }
+  // categorías: agregar
+  if(t.closest("[data-add-cat]")){
+    data.categorias.push({id:uid(),nombre:"Nueva categoría",grupo:"variables"}); guardar(); render(); return;
+  }
+  // categorías: borrar
+  const dc=t.closest("[data-borrar-cat]");
+  if(dc){
+    if(confirm("¿Eliminar esta categoría? Los gastos que la usaban quedarán como 'variables'.")){
+      data.categorias=data.categorias.filter(c=>c.id!==dc.dataset.borrarCat); guardar(); render();
+    } return;
+  }
+  // cargar ejemplo
+  if(t.closest("[data-ejemplo]")){ cargarEjemplo(); return; }
+});
+
+// Cambios en inputs/selects
+document.getElementById("app").addEventListener("change",e=>{
+  const el=e.target;
+  // crear categoría personalizada al elegir "➕ Otra…"
+  if(el.dataset.tipo==="gasto" && el.dataset.campo==="categoriaId" && el.value==="__nueva__"){
+    const m=getMes(currentYear,currentMonthIdx);
+    const item=(m.gastos||[]).find(x=>x.id===el.dataset.id);
+    const nombre=(prompt("Nombre de tu nueva categoría de gasto:")||"").trim();
+    if(nombre){
+      let grupo = (prompt("¿A qué grupo pertenece? Escribe: fijos, variables o viajes","variables")||"variables").trim().toLowerCase();
+      if(!["fijos","variables","viajes"].includes(grupo)) grupo="variables";
+      const nueva={id:uid(),nombre,grupo};
+      data.categorias.push(nueva);
+      if(item) item.categoriaId=nueva.id;
+      guardar();
+    }
+    render(); // si canceló, vuelve a la categoría anterior
+    return;
+  }
+  // fila de mes (ingreso/gasto)
+  if(el.dataset.tipo){
+    const m=getMes(currentYear,currentMonthIdx);
+    const lista = el.dataset.tipo==="ingreso" ? m.ingresos : m.gastos;
+    const item=lista.find(x=>x.id===el.dataset.id);
+    if(item){ item[el.dataset.campo] = el.dataset.campo==="monto" ? (+el.value||0) : el.value; guardar();
+      // re-render suave solo si cambia un monto o categoría (afecta totales)
+      if(el.dataset.campo==="monto"||el.dataset.campo==="categoriaId") render();
+    }
+    return;
+  }
+  // objetivos
+  if(el.dataset.obj){ data.objetivos[el.dataset.obj]=Math.max(0,+el.value||0); guardar(); render(); return; }
+  // meta de ahorro en dinero
+  if(el.hasAttribute && el.hasAttribute("data-metaahorro")){ data.metaAhorroAnual=Math.max(0,+el.value||0); guardar(); render(); return; }
+  // categorías
+  if(el.dataset.cat){
+    const c=categoria(el.dataset.cat);
+    if(c){ c[el.dataset.campo]=el.value; guardar(); if(el.dataset.campo==="grupo") render(); }
+    return;
+  }
+});
+
+function cambiarMes(delta){
+  currentMonthIdx+=delta;
+  if(currentMonthIdx<0){currentMonthIdx=11; currentYear--; syncYearSel();}
+  if(currentMonthIdx>11){currentMonthIdx=0; currentYear++; syncYearSel();}
+  render();
+}
+
+/* Controles superiores */
+const yearSel=document.getElementById("yearSel");
+function syncYearSel(){ if(![...yearSel.options].some(o=>+o.value===currentYear)) llenarYears(); yearSel.value=currentYear; }
+function llenarYears(){
+  const base=currentYear; yearSel.innerHTML="";
+  for(let y=base-3;y<=base+3;y++){ const o=document.createElement("option"); o.value=y; o.textContent=y; yearSel.appendChild(o); }
+  yearSel.value=currentYear;
+}
+yearSel.addEventListener("change",()=>{ currentYear=+yearSel.value; render(); });
+
+const curSel=document.getElementById("curSel");
+curSel.addEventListener("change",()=>{ data.currency=curSel.value; guardar(); render(); });
+
+const themeBtn=document.getElementById("themeBtn");
+function aplicarTema(){
+  document.documentElement.setAttribute("data-theme", data.theme==="dark"?"dark":"light");
+  themeBtn.textContent = data.theme==="dark" ? "☀️" : "🌙";
+}
+themeBtn.addEventListener("click",()=>{ data.theme = data.theme==="dark"?"light":"dark"; guardar(); aplicarTema(); });
+
+// Exportar / Importar
+document.getElementById("exportBtn").addEventListener("click",()=>{
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="coin-presupuesto.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("importBtn").addEventListener("click",()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change",ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d && d.categorias && d.meses){ data=d; guardar(); initFromData(); alert("¡Datos importados! ✅"); } else alert("Ese archivo no parece un respaldo de Coin."); }catch(e){ alert("No se pudo leer el archivo."); } };
+  r.readAsText(f); ev.target.value="";
+});
+
+// Reset total
+document.getElementById("resetLink").addEventListener("click",e=>{
+  e.preventDefault();
+  if(confirm("Esto borrará TODOS tus datos de Coin en este navegador. ¿Continuar?")){
+    data=datosNuevos(); guardar(); initFromData();
+  }
+});
+
+/* Datos de ejemplo (para demo / primera vez) */
+function cargarEjemplo(){
+  const ing=4500000; // ingreso mensual de ejemplo (COP)
+  const plantillaGastos=[
+    ["arriendo",1300000],["servicios",250000],["internet",120000],
+    ["mercado",700000],["transporte",300000],["restaurantes",280000],
+    ["ocio",220000],["suscripciones",70000]
+  ];
+  for(let i=0;i<=currentMonthIdx;i++){
+    const m=getMes(currentYear,i);
+    m.ingresos=[{id:uid(),etiqueta:"Salario",monto:ing}];
+    m.gastos=plantillaGastos.map(([cat,base])=>({id:uid(),categoriaId:cat,monto:Math.round(base*(0.9+ (i%3)*0.07)),nota:""}));
+    if(i===5) m.gastos.push({id:uid(),categoriaId:"viajes",monto:1200000,nota:"Vacaciones mitad de año"});
+  }
+  if(!data.metaAhorroAnual) data.metaAhorroAnual=6000000;
+  guardar(); view="year"; render();
+}
+
+/* =====================================================================
+   8) INICIO
+   ===================================================================== */
+function initFromData(){
+  curSel.value=data.currency||"COP";
+  aplicarTema();
+  llenarYears();
+  render();
+}
+function init(){
+  data=cargar();
+  const hoy=new Date();
+  currentYear=hoy.getFullYear();
+  currentMonthIdx=hoy.getMonth();
+  initFromData();
+}
+init();
+</script>
+</body>
+</html>

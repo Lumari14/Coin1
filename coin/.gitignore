@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
+
+# Respaldos exportados desde la app (datos personales)
+coin-presupuesto.json
+*.local.json
